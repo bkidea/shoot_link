@@ -15,38 +15,47 @@ export async function checkRateLimit(
   config: Partial<RateLimitConfig> = {}
 ): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
   const { maxRequests, windowMs } = { ...DEFAULT_CONFIG, ...config }
-  const key = `rate_limit:${identifier}`
   const now = Date.now()
-  const windowStart = now - windowMs
 
   try {
-    // 현재 요청 수 확인
-    const requests = await redis.zrangebyscore(key, windowStart, '+inf')
-    const currentCount = requests.length
-
+    // 간단한 카운터 기반 Rate Limiting (Upstash Redis 호환)
+    const currentKey = `rate_limit_current:${identifier}`
+    const resetKey = `rate_limit_reset:${identifier}`
+    
+    // 현재 카운터 가져오기
+    const currentCountResult = await redis.get(currentKey)
+    const resetTimeResult = await redis.get(resetKey)
+    
+    const currentCount = typeof currentCountResult === 'number' ? currentCountResult : 0
+    const resetTime = typeof resetTimeResult === 'number' ? resetTimeResult : (now + windowMs)
+    
+    // 윈도우가 지났으면 리셋
+    if (now > resetTime) {
+      await redis.setex(currentKey, Math.ceil(windowMs / 1000), 1)
+      await redis.setex(resetKey, Math.ceil(windowMs / 1000), now + windowMs)
+      return {
+        allowed: true,
+        remaining: maxRequests - 1,
+        resetTime: now + windowMs
+      }
+    }
+    
+    // 요청 수 체크
     if (currentCount >= maxRequests) {
-      // 윈도우 내 첫 번째 요청 시간 확인
-      const firstRequest = await redis.zrange(key, 0, 0, { withScores: true })
-      const resetTime = firstRequest.length > 0 ? firstRequest[0].score + windowMs : now + windowMs
-      
       return {
         allowed: false,
         remaining: 0,
-        resetTime
+        resetTime: resetTime
       }
     }
-
-    // 새 요청 추가
-    await redis.zadd(key, now, now.toString())
-    // 윈도우 밖의 오래된 요청들 제거
-    await redis.zremrangebyscore(key, '-inf', windowStart)
-    // 키 만료 시간 설정
-    await redis.expire(key, Math.ceil(windowMs / 1000))
-
+    
+    // 카운터 증가
+    await redis.incr(currentKey)
+    
     return {
       allowed: true,
       remaining: maxRequests - currentCount - 1,
-      resetTime: now + windowMs
+      resetTime: resetTime
     }
   } catch (error) {
     console.error('Rate limit 체크 오류:', error)
