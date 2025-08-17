@@ -1,3 +1,5 @@
+import { redis } from './redis'
+
 interface SecurityLog {
   timestamp: string
   event: string
@@ -6,7 +8,7 @@ interface SecurityLog {
   url?: string
   result: 'success' | 'blocked' | 'error'
   reason?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 class SecurityLogger {
@@ -51,7 +53,7 @@ class SecurityLogger {
     request: Request,
     result: 'success' | 'blocked' | 'error',
     reason?: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): void {
     try {
       const forwarded = request.headers.get('x-forwarded-for')
@@ -79,8 +81,8 @@ class SecurityLogger {
     }
   }
 
-  private sanitizeMetadata(metadata: Record<string, any>): Record<string, any> {
-    const sanitized: Record<string, any> = {}
+  private sanitizeMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+    const sanitized: Record<string, unknown> = {}
     
     for (const [key, value] of Object.entries(metadata)) {
       if (typeof value === 'string') {
@@ -92,7 +94,7 @@ class SecurityLogger {
           sanitized[key] = value.slice(0, 50)
         }
       } else if (typeof value === 'object' && value !== null) {
-        sanitized[key] = this.sanitizeMetadata(value)
+        sanitized[key] = this.sanitizeMetadata(value as Record<string, unknown>)
       } else {
         sanitized[key] = value
       }
