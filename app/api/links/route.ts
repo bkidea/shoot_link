@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
       referrers: {}
     })
     
-    const shortUrl = `${process.env.PUBLIC_BASE_URL}/r/${slug}`
+    const baseUrl = process.env.PUBLIC_BASE_URL || 'https://shoot-link.vercel.app'
+    const shortUrl = `${baseUrl}/r/${slug}`
     
     return NextResponse.json({
       success: true,
