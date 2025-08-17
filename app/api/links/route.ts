@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     const { url } = await request.json()
     
     // URL 검증
-    const validation = validateUrl(url)
+    const validation = await validateUrl(url)
     if (!validation.isValid) {
       return NextResponse.json(
         { error: validation.error },
